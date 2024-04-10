@@ -11,8 +11,7 @@ import com.bestseller.dbqueue.core.api.QueueProducer;
 import com.bestseller.dbqueue.core.api.TaskPayloadTransformer;
 import com.bestseller.dbqueue.core.internal.processing.MillisTimeProvider;
 import com.bestseller.dbqueue.core.settings.QueueId;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 
 /**
@@ -22,9 +21,10 @@ import org.slf4j.LoggerFactory;
  * @author Oleg Kandaurov
  * @since 11.06.2021
  */
+@Slf4j
 public class MonitoringQueueProducer<PayloadT> implements QueueProducer<PayloadT> {
 
-    private static final Logger log = LoggerFactory.getLogger(MonitoringQueueProducer.class);
+
 
     @Nonnull
     private final QueueProducer<PayloadT> queueProducer;
