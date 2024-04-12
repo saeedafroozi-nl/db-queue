@@ -71,6 +71,7 @@ public class SpringDatabaseAccessLayer implements DatabaseAccessLayer {
             case POSTGRESQL -> new PostgresQueueDao(jdbcOperations, queueTableSchema);
             case MSSQL -> new MssqlQueueDao(jdbcOperations, queueTableSchema);
             case H2 -> new H2QueueDao(jdbcOperations, queueTableSchema);
+            case MYSQL -> new MysqlQueueDao(jdbcOperations, queueTableSchema);
             default -> throw new IllegalArgumentException("unsupported database kind: " + databaseDialect);
         };
     }

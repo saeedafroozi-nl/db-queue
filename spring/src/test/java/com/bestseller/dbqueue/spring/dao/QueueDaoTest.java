@@ -12,7 +12,6 @@ import com.bestseller.dbqueue.core.config.QueueTableSchema;
 import com.bestseller.dbqueue.core.dao.QueueDao;
 import com.bestseller.dbqueue.core.settings.QueueId;
 import com.bestseller.dbqueue.core.settings.QueueLocation;
-
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
@@ -22,11 +21,6 @@ import java.util.function.Supplier;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.not;
 
-/**
- * @author Oleg Kandaurov
- * @author Behrooz Shabani
- * @since 25.01.2020
- */
 @Ignore
 public abstract class QueueDaoTest {
 

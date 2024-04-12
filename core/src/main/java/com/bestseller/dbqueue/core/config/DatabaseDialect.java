@@ -29,5 +29,9 @@ public enum DatabaseDialect {
     /**
      * H2 in-memory database
      */
-    H2
+    H2,
+    /**
+     * MySQL
+     */
+    MYSQL
 }
