@@ -41,6 +41,10 @@ public class MysqlDatabaseInitializer {
             "  tat INTEGER NOT NULL DEFAULT 0,\n" +
             "  trace TEXT\n" +
             ") ENGINE=InnoDB;";
+    private static final String MYSQL_CUSTOM_TABLE_INDEX_DDL =
+            "CREATE INDEX %s_name_time_desc_idx\n" +
+            "  ON %s (qn, pt, qid DESC);\n" +
+            "\n";
 
     private static final String MYSQL_DEFAULT_TABLE_DDL = "CREATE TABLE %s (\n" +
             "  id INT AUTO_INCREMENT PRIMARY KEY,\n" +
@@ -52,6 +56,10 @@ public class MysqlDatabaseInitializer {
             "  reenqueue_attempt INTEGER NOT NULL DEFAULT 0,\n" +
             "  total_attempt INTEGER NOT NULL DEFAULT 0\n" +
             ") ENGINE=InnoDB;";
+    private static final String MYSQL_DEFAULT_TABLE_INDEX_DDL =
+            "CREATE INDEX %s_name_time_desc_idx\n" +
+            "  ON %s (queue_name, next_process_at, id DESC);\n" +
+            "\n";
 
     private static final String MYSQL_DEFAULT_WO_IDENT_TABLE_DDL = "CREATE TABLE %s (\n" +
             "  id INT NOT NULL,\n" +
@@ -64,6 +72,10 @@ public class MysqlDatabaseInitializer {
             "  total_attempt INTEGER NOT NULL DEFAULT 0,\n" +
             "  PRIMARY KEY (id)\n" +
             ") ENGINE=InnoDB;";
+    private static final String MYSQL_DEFAULT_WO_IDENT_TABLE_INDEX_DDL =
+            "CREATE INDEX %s_name_time_desc_idx\n" +
+            "  ON %s (queue_name, next_process_at, id DESC);\n" +
+            "\n";
 
     private static JdbcTemplate mysqlJdbcTemplate;
     private static TransactionTemplate mysqlTransactionTemplate;
@@ -90,8 +102,13 @@ public class MysqlDatabaseInitializer {
         mysqlTransactionTemplate.setPropagationBehavior(TransactionDefinition.PROPAGATION_REQUIRED);
 
         executeDdl(String.format(MYSQL_DEFAULT_TABLE_DDL, DEFAULT_TABLE_NAME));
+        executeDdl(String.format(MYSQL_DEFAULT_TABLE_INDEX_DDL, DEFAULT_TABLE_NAME, DEFAULT_TABLE_NAME));
+
         executeDdl(String.format(MYSQL_DEFAULT_WO_IDENT_TABLE_DDL, DEFAULT_TABLE_NAME_WO_IDENT));
+        executeDdl(String.format(MYSQL_DEFAULT_WO_IDENT_TABLE_INDEX_DDL, DEFAULT_TABLE_NAME_WO_IDENT, DEFAULT_TABLE_NAME_WO_IDENT));
+
         executeDdl(String.format(MYSQL_CUSTOM_TABLE_DDL, CUSTOM_TABLE_NAME));
+        executeDdl(String.format(MYSQL_CUSTOM_TABLE_INDEX_DDL, CUSTOM_TABLE_NAME, CUSTOM_TABLE_NAME));
     }
 
     private static void executeDdl(String ddl) {

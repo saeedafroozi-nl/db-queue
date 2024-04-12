@@ -46,9 +46,7 @@ public class MysqlQueueDao implements QueueDao {
     public long enqueue(@Nonnull QueueLocation location, @Nonnull EnqueueParams<String> enqueueParams) {
         requireNonNull(location);
         requireNonNull(enqueueParams);
-        long currentTimeMillis = System.currentTimeMillis();
-        Timestamp currentTimestamp = new Timestamp(currentTimeMillis);
-
+        Timestamp currentTimestamp = getCurrentTimestamp();
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("queueName", location.getQueueId().asString())
                 .addValue("payload", enqueueParams.getPayload())
@@ -93,15 +91,13 @@ public class MysqlQueueDao implements QueueDao {
     public boolean reenqueue(@Nonnull QueueLocation location, long taskId, @Nonnull Duration executionDelay) {
         requireNonNull(location);
         requireNonNull(executionDelay);
-        long currentTimeMillis = System.currentTimeMillis();
-        Timestamp currentTimestamp = new Timestamp(currentTimeMillis);
         int updatedRows = jdbcTemplate.update(reenqueueSqlCache.computeIfAbsent(location, this::createReenqueueSql),
                 new MapSqlParameterSource()
                         .addValue("id", taskId)
                         .addValue("queueName", location.getQueueId().asString())
                         .addValue("executionDelay", executionDelay.toMillis())
                         .addValue("nextProcessAt",
-                                currentTimestamp.toLocalDateTime().plusSeconds(executionDelay.getSeconds())));
+                                getCurrentTimestamp().toLocalDateTime().plusSeconds(executionDelay.getSeconds())));
         return updatedRows != 0;
     }
 
@@ -136,6 +132,11 @@ public class MysqlQueueDao implements QueueDao {
                 queueTableSchema.getReenqueueAttemptField() + " + 1 " +
                 "WHERE " + queueTableSchema.getIdField() + " = :id AND " +
                 queueTableSchema.getQueueNameField() + " = :queueName";
+    }
+
+    private Timestamp getCurrentTimestamp() {
+        long currentTimeMillis = System.currentTimeMillis();
+        return new Timestamp(currentTimeMillis);
     }
 
 
