@@ -1,5 +1,10 @@
 package com.bestseller.dbqueue.spring.dao;
 
+import com.bestseller.dbqueue.core.api.EnqueueParams;
+import com.bestseller.dbqueue.core.config.QueueTableSchema;
+import com.bestseller.dbqueue.core.dao.QueueDao;
+import com.bestseller.dbqueue.core.settings.QueueId;
+import com.bestseller.dbqueue.core.settings.QueueLocation;
 import org.junit.Assert;
 import org.junit.Ignore;
 import org.junit.Test;
@@ -7,14 +12,15 @@ import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.transaction.TransactionStatus;
 import org.springframework.transaction.support.TransactionCallbackWithoutResult;
 import org.springframework.transaction.support.TransactionTemplate;
-import com.bestseller.dbqueue.core.api.EnqueueParams;
-import com.bestseller.dbqueue.core.config.QueueTableSchema;
-import com.bestseller.dbqueue.core.dao.QueueDao;
-import com.bestseller.dbqueue.core.settings.QueueId;
-import com.bestseller.dbqueue.core.settings.QueueLocation;
+
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
+import java.util.TimeZone;
 import java.util.UUID;
 import java.util.function.Supplier;
 
@@ -65,12 +71,14 @@ public abstract class QueueDaoTest {
             ZonedDateTime afterExecution = ZonedDateTime.now();
             Assert.assertThat(rs.next(), equalTo(true));
             Assert.assertThat(rs.getString(tableSchema.getPayloadField()), equalTo(payload));
-            ZonedDateTime nextProcessAt = ZonedDateTime.ofInstant(rs.getTimestamp(tableSchema.getNextProcessAtField()).toInstant(),
-                    ZoneId.systemDefault());
+
+
+
+            ZonedDateTime nextProcessAt = getZonedDateTime(rs, tableSchema.getNextProcessAtField());
+
             Assert.assertThat(nextProcessAt.isAfter(beforeExecution.plus(executionDelay).minus(WINDOWS_OS_DELAY)), equalTo(true));
             Assert.assertThat(nextProcessAt.isBefore(afterExecution.plus(executionDelay).plus(WINDOWS_OS_DELAY)), equalTo(true));
-            ZonedDateTime createdAt = ZonedDateTime.ofInstant(rs.getTimestamp(tableSchema.getCreatedAtField()).toInstant(),
-                    ZoneId.systemDefault());
+            ZonedDateTime createdAt = getZonedDateTime(rs, tableSchema.getCreatedAtField());
             Assert.assertThat(createdAt.isAfter(beforeExecution.minus(WINDOWS_OS_DELAY)), equalTo(true));
             Assert.assertThat(createdAt.isBefore(afterExecution.plus(WINDOWS_OS_DELAY)), equalTo(true));
 
@@ -115,8 +123,7 @@ public abstract class QueueDaoTest {
         jdbcTemplate.query("select * from " + tableName + " where " + tableSchema.getIdField() + "=" + enqueueId, rs -> {
             ZonedDateTime afterExecution = ZonedDateTime.now();
             Assert.assertThat(rs.next(), equalTo(true));
-            ZonedDateTime nextProcessAt = ZonedDateTime.ofInstant(rs.getTimestamp(tableSchema.getNextProcessAtField()).toInstant(),
-                    ZoneId.systemDefault());
+            ZonedDateTime nextProcessAt = getZonedDateTime(rs, tableSchema.getNextProcessAtField());
 
             Assert.assertThat(nextProcessAt.isAfter(beforeExecution.plus(executionDelay).minus(WINDOWS_OS_DELAY)), equalTo(true));
             Assert.assertThat(nextProcessAt.isBefore(afterExecution.plus(executionDelay).plus(WINDOWS_OS_DELAY)), equalTo(true));
@@ -197,6 +204,14 @@ public abstract class QueueDaoTest {
 
     protected <T> T executeInTransaction(Supplier<T> supplier) {
         return transactionTemplate.execute(status -> supplier.get());
+    }
+
+    private ZonedDateTime getZonedDateTime(ResultSet rs, String fieldName) throws SQLException {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeZone(TimeZone.getTimeZone("UTC"));
+        Timestamp ts = rs.getTimestamp(fieldName, cal);
+       return ZonedDateTime.ofInstant(ts.toInstant(),
+               ZoneId.systemDefault());
     }
 
 }

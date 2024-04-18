@@ -1,5 +1,7 @@
-package com.bestseller.dbqueue.spring.dao;
+package com.bestseller.dbqueue.spring.dao.postgres;
 
+import com.bestseller.dbqueue.spring.dao.PostgresQueueDao;
+import com.bestseller.dbqueue.spring.dao.QueueDaoTest;
 import org.junit.BeforeClass;
 import com.bestseller.dbqueue.core.settings.QueueId;
 import com.bestseller.dbqueue.core.settings.QueueLocation;

@@ -1,5 +1,7 @@
-package com.bestseller.dbqueue.spring.dao;
+package com.bestseller.dbqueue.spring.dao.mysql;
 
+import com.bestseller.dbqueue.spring.dao.MysqlQueueDao;
+import com.bestseller.dbqueue.spring.dao.QueueDaoTest;
 import com.bestseller.dbqueue.spring.dao.utils.MysqlDatabaseInitializer;
 import org.junit.BeforeClass;
 

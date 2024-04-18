@@ -1,13 +1,5 @@
 package com.bestseller.dbqueue.spring.dao;
 
-import org.junit.Assert;
-import org.junit.Ignore;
-import org.junit.Test;
-import org.springframework.jdbc.core.JdbcTemplate;
-import org.springframework.transaction.TransactionStatus;
-import org.springframework.transaction.support.TransactionCallbackWithoutResult;
-import org.springframework.transaction.support.TransactionTemplate;
-import org.testcontainers.shaded.org.hamcrest.Matchers;
 import com.bestseller.dbqueue.core.api.EnqueueParams;
 import com.bestseller.dbqueue.core.api.TaskRecord;
 import com.bestseller.dbqueue.core.config.QueueTableSchema;
@@ -18,8 +10,19 @@ import com.bestseller.dbqueue.core.settings.FailureSettings;
 import com.bestseller.dbqueue.core.settings.PollSettings;
 import com.bestseller.dbqueue.core.settings.QueueId;
 import com.bestseller.dbqueue.core.settings.QueueLocation;
+import org.junit.Assert;
+import org.junit.Ignore;
+import org.junit.Test;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
+import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallbackWithoutResult;
+import org.springframework.transaction.support.TransactionTemplate;
+import org.testcontainers.shaded.org.hamcrest.Matchers;
 
 import java.math.BigInteger;
+import java.sql.Timestamp;
 import java.time.Duration;
 import java.time.ZonedDateTime;
 import java.util.List;
@@ -28,6 +31,7 @@ import java.util.UUID;
 import java.util.function.BiFunction;
 import java.util.function.Supplier;
 
+import static java.util.Objects.requireNonNull;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.not;
@@ -40,7 +44,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 @Ignore
 public abstract class QueuePickTaskDaoTest {
 
-    protected final JdbcTemplate jdbcTemplate;
+    protected final NamedParameterJdbcTemplate jdbcTemplate;
     protected final TransactionTemplate transactionTemplate;
 
     protected final String tableName;
@@ -61,7 +65,7 @@ public abstract class QueuePickTaskDaoTest {
         this.tableName = tableName;
         this.tableSchema = tableSchema;
         this.transactionTemplate = transactionTemplate;
-        this.jdbcTemplate = jdbcTemplate;
+        this.jdbcTemplate = new NamedParameterJdbcTemplate(requireNonNull(jdbcTemplate));
         this.queueDao = queueDao;
         this.pickTaskDaoFactory = pickTaskDaoFactory;
     }
@@ -213,9 +217,13 @@ public abstract class QueuePickTaskDaoTest {
     }
 
     private TaskRecord resetProcessTimeAndPick(QueuePickTaskDao pickTaskDao, Long enqueueId) {
+        String sqlQuery = "update " + tableName +
+                " set " + tableSchema.getNextProcessAtField() + " = " + currentTimeSql() + " where " + tableSchema.getIdField() + " = :enqueueId";
+        MapSqlParameterSource params = new MapSqlParameterSource()
+                .addValue("enqueueId", enqueueId);
+
         executeInTransaction(() -> {
-            jdbcTemplate.update("update " + tableName +
-                    " set " + tableSchema.getNextProcessAtField() + "= " + currentTimeSql() + " where " + tableSchema.getIdField() + "=" + enqueueId);
+            jdbcTemplate.update(sqlQuery, params);
         });
 
         List<TaskRecord> taskRecords = List.of();

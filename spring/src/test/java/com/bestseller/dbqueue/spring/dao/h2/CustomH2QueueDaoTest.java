@@ -1,5 +1,7 @@
-package com.bestseller.dbqueue.spring.dao;
+package com.bestseller.dbqueue.spring.dao.h2;
 
+import com.bestseller.dbqueue.spring.dao.H2QueueDao;
+import com.bestseller.dbqueue.spring.dao.QueueDaoTest;
 import com.bestseller.dbqueue.spring.dao.utils.H2DatabaseInitializer;
 import org.junit.BeforeClass;
 

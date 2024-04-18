@@ -10,7 +10,6 @@ import org.springframework.jdbc.core.namedparam.MapSqlParameterSource;
 import org.springframework.jdbc.core.namedparam.NamedParameterJdbcTemplate;
 import org.springframework.jdbc.support.GeneratedKeyHolder;
 import javax.annotation.Nonnull;
-import java.sql.Timestamp;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -46,13 +45,10 @@ public class MysqlQueueDao implements QueueDao {
     public long enqueue(@Nonnull QueueLocation location, @Nonnull EnqueueParams<String> enqueueParams) {
         requireNonNull(location);
         requireNonNull(enqueueParams);
-        Timestamp currentTimestamp = getCurrentTimestamp();
         MapSqlParameterSource params = new MapSqlParameterSource()
                 .addValue("queueName", location.getQueueId().asString())
                 .addValue("payload", enqueueParams.getPayload())
-                .addValue("createdAt", currentTimestamp)
-                .addValue("nextProcessAt",
-                        currentTimestamp.toLocalDateTime().plusSeconds(enqueueParams.getExecutionDelay().getSeconds()));
+                .addValue("executionDelay", enqueueParams.getExecutionDelay().getSeconds());
 
         queueTableSchema.getExtFields().forEach(paramName -> params.addValue(paramName, null));
         enqueueParams.getExtData().forEach(params::addValue);
@@ -95,9 +91,7 @@ public class MysqlQueueDao implements QueueDao {
                 new MapSqlParameterSource()
                         .addValue("id", taskId)
                         .addValue("queueName", location.getQueueId().asString())
-                        .addValue("executionDelay", executionDelay.toMillis())
-                        .addValue("nextProcessAt",
-                                getCurrentTimestamp().toLocalDateTime().plusSeconds(executionDelay.getSeconds())));
+                        .addValue("executionDelay", executionDelay.getSeconds()));
         return updatedRows != 0;
     }
 
@@ -105,14 +99,14 @@ public class MysqlQueueDao implements QueueDao {
         return "INSERT INTO " + location.getTableName() + "(" +
                 queueTableSchema.getQueueNameField() + "," +
                 queueTableSchema.getPayloadField() + "," +
-                queueTableSchema.getCreatedAtField() + "," +
                 queueTableSchema.getNextProcessAtField() + "," +
                 queueTableSchema.getReenqueueAttemptField() + "," +
                 queueTableSchema.getTotalAttemptField() +
                 (queueTableSchema.getExtFields().isEmpty() ? "" :
                         queueTableSchema.getExtFields().stream().collect(Collectors.joining(", ", ", ", ""))) +
                 ") VALUES (" +
-                ":queueName, :payload,:createdAt,:nextProcessAt, 0, 0" +
+                ":queueName, :payload,DATE_ADD(CURRENT_TIMESTAMP(),INTERVAL :executionDelay SECOND), " +
+                "0, 0" +
                 (queueTableSchema.getExtFields().isEmpty() ? "" : queueTableSchema.getExtFields().stream()
                         .map(field -> ":" + field).collect(Collectors.joining(", ", ", ", ""))) +
                 ")";
@@ -126,18 +120,13 @@ public class MysqlQueueDao implements QueueDao {
 
     private String createReenqueueSql(@Nonnull QueueLocation location) {
         return "UPDATE " + location.getTableName() + " SET " +
-                queueTableSchema.getNextProcessAtField() + " = :nextProcessAt, " +
+                queueTableSchema.getNextProcessAtField() + " = DATE_ADD(CURRENT_TIMESTAMP(),INTERVAL :executionDelay " +
+                "SECOND), " +
                 queueTableSchema.getAttemptField() + " = 0, " +
                 queueTableSchema.getReenqueueAttemptField() + " = " +
                 queueTableSchema.getReenqueueAttemptField() + " + 1 " +
                 "WHERE " + queueTableSchema.getIdField() + " = :id AND " +
                 queueTableSchema.getQueueNameField() + " = :queueName";
     }
-
-    private Timestamp getCurrentTimestamp() {
-        long currentTimeMillis = System.currentTimeMillis();
-        return new Timestamp(currentTimeMillis);
-    }
-
 
 }

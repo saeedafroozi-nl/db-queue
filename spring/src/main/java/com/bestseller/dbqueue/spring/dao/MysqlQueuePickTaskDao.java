@@ -17,19 +17,27 @@ import javax.annotation.Nonnull;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.TimeZone;
+
 import static java.util.Objects.requireNonNull;
 
 public class MysqlQueuePickTaskDao implements QueuePickTaskDao {
 
     private static final Logger log = LoggerFactory.getLogger(MysqlQueuePickTaskDao.class);
 
-    private String pickTaskSql;
-    private MapSqlParameterSource pickTaskSqlPlaceholders;
+    private String updateTaskSql;
+    private String selectUpdatingTaskSql;
+    private String selectUpdatedTaskSql;
+    private MapSqlParameterSource updateTaskSqlPlaceholders;
+    private MapSqlParameterSource selectUpdatingTaskSqlPlaceholders;
+
     private final NamedParameterJdbcTemplate jdbcTemplate;
     private final QueueTableSchema queueTableSchema;
 
@@ -40,15 +48,31 @@ public class MysqlQueuePickTaskDao implements QueuePickTaskDao {
                                  @Nonnull PollSettings pollSettings) {
         this.jdbcTemplate = new NamedParameterJdbcTemplate(requireNonNull(jdbcTemplate));
         this.queueTableSchema = requireNonNull(queueTableSchema);
-        pickTaskSqlPlaceholders = new MapSqlParameterSource()
+
+        updateTaskSqlPlaceholders = new MapSqlParameterSource()
                 .addValue("queueName", queueLocation.getQueueId().asString())
-                .addValue("retryInterval", failureSettings.getRetryInterval().toMillis());
-        pickTaskSql = createPickTaskSql(queueLocation, failureSettings);
+                .addValue("retryInterval", failureSettings.getRetryInterval().getSeconds());
+
+        updateTaskSql = createPickTaskSql(queueLocation, failureSettings);
+
+        selectUpdatingTaskSql = createSelectPickTaskSql(queueLocation);
+
+        selectUpdatedTaskSql = "SELECT * FROM " + queueLocation.getTableName() + " WHERE " + queueTableSchema.getIdField() + " = :id";
+
+        selectUpdatingTaskSqlPlaceholders = new MapSqlParameterSource()
+                .addValue("queueName", queueLocation.getQueueId().asString());
+
         failureSettings.registerObserver((oldValue, newValue) -> {
-            pickTaskSql = createPickTaskSql(queueLocation, newValue);
-            pickTaskSqlPlaceholders = new MapSqlParameterSource()
+            updateTaskSql = createPickTaskSql(queueLocation, newValue);
+
+            updateTaskSqlPlaceholders = new MapSqlParameterSource()
                     .addValue("queueName", queueLocation.getQueueId().asString())
-                    .addValue("retryInterval", newValue.getRetryInterval().toMillis());
+                    .addValue("retryInterval", newValue.getRetryInterval().getSeconds());
+
+            selectUpdatingTaskSql = createSelectPickTaskSql(queueLocation);
+
+            selectUpdatingTaskSqlPlaceholders = new MapSqlParameterSource().addValue("queueName", queueLocation.getQueueId().asString());
+
         });
         pollSettings.registerObserver((oldValue, newValue) -> {
             if (newValue.getBatchSize() != 1) {
@@ -60,8 +84,25 @@ public class MysqlQueuePickTaskDao implements QueuePickTaskDao {
     @Override
     @Nonnull
     public List<TaskRecord> pickTasks() {
-        return requireNonNull(jdbcTemplate.execute(pickTaskSql,
-                pickTaskSqlPlaceholders,
+
+        List<Long> ids = jdbcTemplate.query(selectUpdatingTaskSql, selectUpdatingTaskSqlPlaceholders,
+                (resultSet, rowNum) -> resultSet.getLong(queueTableSchema.getIdField()));
+
+        if (!ids.isEmpty()) {
+            Long id = ids.get(0);
+            // Execute the UPDATE query
+            updateTaskSqlPlaceholders.addValue("id", id);
+            jdbcTemplate.update(updateTaskSql, updateTaskSqlPlaceholders);
+            // Return the updated record
+            return buildTaskRecordFromResultSet();
+        } else {
+            // No row to update
+            return List.of();
+        }
+    }
+
+    private List<TaskRecord> buildTaskRecordFromResultSet() {
+        return requireNonNull(jdbcTemplate.execute(selectUpdatedTaskSql, updateTaskSqlPlaceholders,
                 (PreparedStatement ps) -> {
                     try (ResultSet rs = ps.executeQuery()) {
                         if (!rs.next()) {
@@ -90,35 +131,40 @@ public class MysqlQueuePickTaskDao implements QueuePickTaskDao {
                 }));
     }
 
+    private String createSelectPickTaskSql(@Nonnull QueueLocation location) {
+        return "SELECT " + queueTableSchema.getIdField() + " FROM " + location.getTableName() + " WHERE " + queueTableSchema.getQueueNameField() +
+                " = :queueName AND " + queueTableSchema.getNextProcessAtField() + " <= CURRENT_TIMESTAMP() " +
+                "ORDER BY " + queueTableSchema.getNextProcessAtField() + " ASC LIMIT 1";
+    }
+
     private String createPickTaskSql(@Nonnull QueueLocation location, FailureSettings failureSettings) {
-        return "UPDATE " + location.getTableName() + " AS t1, " +
-                "(SELECT " + queueTableSchema.getIdField() + " " +
-                "FROM " + location.getTableName() +
-                " WHERE " + queueTableSchema.getQueueNameField() + " = :queueName " +
-                "AND " + queueTableSchema.getNextProcessAtField() + " <= NOW() " +
-                "ORDER BY " + queueTableSchema.getNextProcessAtField() + " ASC " +
-                "LIMIT 1) AS t2 " +
-                "SET t1." + queueTableSchema.getNextProcessAtField() + " = " +
-                getNextProcessTimeSql(failureSettings.getRetryType(), queueTableSchema) + ", " +
-                "t1." + queueTableSchema.getAttemptField() + " = t1." + queueTableSchema.getAttemptField() + " + 1, " +
-                "t1." + queueTableSchema.getTotalAttemptField() + " = t1." + queueTableSchema.getTotalAttemptField() + " + 1 " +
-                "WHERE t1." + queueTableSchema.getIdField() + " = t2." + queueTableSchema.getIdField();
+        return "UPDATE " + location.getTableName() + " SET " +
+                queueTableSchema.getNextProcessAtField() + " = " + getNextProcessTimeSql(failureSettings.getRetryType(),
+                queueTableSchema) + ", " +
+                queueTableSchema.getAttemptField() + " = " + queueTableSchema.getAttemptField() + " + 1, " +
+                queueTableSchema.getTotalAttemptField() + " = " + queueTableSchema.getTotalAttemptField() + " + 1 " +
+                "WHERE " + queueTableSchema.getIdField() + " = :id";
+
     }
 
-    private ZonedDateTime getZonedDateTime(ResultSet rs, String time) throws SQLException {
-        return ZonedDateTime.ofInstant(rs.getTimestamp(time).toInstant(), ZoneId.systemDefault());
+    private ZonedDateTime getZonedDateTime(ResultSet rs, String fieldName) throws SQLException {
+        Calendar cal = Calendar.getInstance();
+        cal.setTimeZone(TimeZone.getTimeZone("UTC"));
+        Timestamp ts = rs.getTimestamp(fieldName, cal);
+        return ZonedDateTime.ofInstant(ts.toInstant(),
+                ZoneId.systemDefault());
     }
-
 
     @Nonnull
     private String getNextProcessTimeSql(@Nonnull FailRetryType failRetryType, QueueTableSchema queueTableSchema) {
         requireNonNull(failRetryType);
+        requireNonNull(failRetryType);
         return switch (failRetryType) {
             case GEOMETRIC_BACKOFF ->
-                    "DATE_ADD(NOW(), INTERVAL POW(2, " + queueTableSchema.getAttemptField() + ") * :retryInterval / 1000 SECOND)";
+                    "DATE_ADD(CURRENT_TIMESTAMP(), INTERVAL POW(2, " + queueTableSchema.getAttemptField() + ") * " + ":retryInterval SECOND) ";
             case ARITHMETIC_BACKOFF ->
-                    "DATE_ADD(NOW(), INTERVAL (1 + (" + queueTableSchema.getAttemptField() + " * 2)) * :retryInterval / 1000 SECOND)";
-            case LINEAR_BACKOFF -> "DATE_ADD(NOW(), INTERVAL :retryInterval / 1000 SECOND)";
+                    "DATE_ADD(CURRENT_TIMESTAMP(), INTERVAL (1 + (" + queueTableSchema.getAttemptField() + " * 2)) * " + ":retryInterval SECOND)";
+            case LINEAR_BACKOFF -> "DATE_ADD(CURRENT_TIMESTAMP(), INTERVAL :retryInterval SECOND)";
         };
     }
 }

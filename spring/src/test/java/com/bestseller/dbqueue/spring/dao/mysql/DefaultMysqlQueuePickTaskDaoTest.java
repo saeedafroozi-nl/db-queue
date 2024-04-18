@@ -1,9 +1,11 @@
-package com.bestseller.dbqueue.spring.dao;
+package com.bestseller.dbqueue.spring.dao.mysql;
 
+import com.bestseller.dbqueue.spring.dao.MysqlQueueDao;
+import com.bestseller.dbqueue.spring.dao.MysqlQueuePickTaskDao;
+import com.bestseller.dbqueue.spring.dao.QueuePickTaskDaoTest;
 import com.bestseller.dbqueue.spring.dao.utils.MysqlDatabaseInitializer;
 import org.junit.BeforeClass;
 
-import java.sql.Timestamp;
 
 public class DefaultMysqlQueuePickTaskDaoTest extends QueuePickTaskDaoTest {
     @BeforeClass
@@ -12,8 +14,8 @@ public class DefaultMysqlQueuePickTaskDaoTest extends QueuePickTaskDaoTest {
     }
 
     public DefaultMysqlQueuePickTaskDaoTest() {
-        super(new MssqlQueueDao(MysqlDatabaseInitializer.getJdbcTemplate(), MysqlDatabaseInitializer.DEFAULT_SCHEMA),
-                (queueLocation, failureSettings) -> new MssqlQueuePickTaskDao(MysqlDatabaseInitializer.getJdbcTemplate(),
+        super(new MysqlQueueDao(MysqlDatabaseInitializer.getJdbcTemplate(), MysqlDatabaseInitializer.DEFAULT_SCHEMA),
+                (queueLocation, failureSettings) -> new MysqlQueuePickTaskDao(MysqlDatabaseInitializer.getJdbcTemplate(),
                         MysqlDatabaseInitializer.DEFAULT_SCHEMA, queueLocation, failureSettings, getPollSettings()),
                 MysqlDatabaseInitializer.DEFAULT_TABLE_NAME, MysqlDatabaseInitializer.DEFAULT_SCHEMA,
                 MysqlDatabaseInitializer.getJdbcTemplate(), MysqlDatabaseInitializer.getTransactionTemplate());
@@ -21,8 +23,6 @@ public class DefaultMysqlQueuePickTaskDaoTest extends QueuePickTaskDaoTest {
 
     @Override
     protected String currentTimeSql() {
-        long currentTimeMillis = System.currentTimeMillis();
-        Timestamp currentTimestamp = new Timestamp(currentTimeMillis);
-        return currentTimestamp.toString();
+        return "CURRENT_TIMESTAMP()";
     }
 }

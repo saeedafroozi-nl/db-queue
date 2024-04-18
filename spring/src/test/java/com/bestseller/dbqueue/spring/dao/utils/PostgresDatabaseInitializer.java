@@ -86,7 +86,7 @@ public class PostgresDatabaseInitializer {
 
         PostgreSQLContainer<?> dbContainer =new PostgreSQLContainer<>(
                 DockerImageName.parse("postgis/postgis:16-3.4-alpine").asCompatibleSubstituteFor("postgres")
-        );
+        ).withUsername("test").withPassword("test").withDatabaseName("test");
 
         dbContainer.withEnv("POSTGRES_INITDB_ARGS", "--nosync");
         dbContainer.withCommand("postgres -c fsync=off -c full_page_writes=off -c synchronous_commit=off");
